@@ -1,5 +1,3 @@
-Here’s a clean and ready-to-use `README.md` for your **Finish-It frontend (Next.js) project**:
-
 ````markdown
 # Finish-It Frontend
 
