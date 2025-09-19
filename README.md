@@ -1,36 +1,137 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+````markdown
+# Finish-It Frontend
 
-## Getting Started
+This is the **frontend** for the Finish-It application, built with **Next.js 15** (App/Pages Router supported) and React. It connects to a **Node.js/Express backend** for user authentication and data management.
 
-First, run the development server:
+---
+
+## **Table of Contents**
+
+- [Features](#features)  
+- [Tech Stack](#tech-stack)  
+- [Prerequisites](#prerequisites)  
+- [Installation](#installation)  
+- [Environment Variables](#environment-variables)  
+- [Running the Development Server](#running-the-development-server)  
+- [Project Structure](#project-structure)  
+- [API Endpoints](#api-endpoints)  
+- [Notes](#notes)  
+
+---
+
+## **Features**
+
+- Signup & login forms connecting to the backend  
+- JWT-based authentication support  
+- Clean and simple UI for user interactions  
+- Ready to extend for additional features  
+
+---
+
+## **Tech Stack**
+
+- **Frontend:** Next.js, React  
+- **Styling:** CSS / inline styles (can be swapped with Tailwind, Chakra UI, etc.)  
+- **API:** Connects to Node.js/Express backend  
+
+---
+
+## **Prerequisites**
+
+- Node.js >= 18.x  
+- npm >= 10.x  
+- Backend running (Finish-It backend at `http://localhost:5000`)  
+
+---
+
+## **Installation**
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/SHAFIN115/FinishIt-frontend.git
+cd FinishIt-frontend
+````
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+---
+
+## **Environment Variables**
+
+Create a `.env.local` file in the project root:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+* `NEXT_PUBLIC_API_URL`: The URL of your backend server. Make sure the backend is running.
+
+> **Important:** Restart the Next.js dev server after editing `.env.local`.
+
+---
+
+## **Running the Development Server**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* Local: [http://localhost:3000](http://localhost:3000)
+* Network: `http://<your-ip>:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## **Project Structure**
 
-## Learn More
+```
+finish-it-frontend/
+├── pages/               # Pages Router (if used)
+│   ├── index.js         # Home page
+│   ├── login.js         # Login page
+│   └── signup.js        # Signup page
+├── app/                 # App Router (if used, optional)
+│   ├── page.js
+│   └── ...
+├── public/              # Static assets
+├── styles/              # CSS / styling
+├── .env.local           # Environment variables
+├── package.json
+└── ...
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## **API Endpoints (Backend)**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The frontend expects the following backend endpoints:
 
-## Deploy on Vercel
+| Method | URL                 | Description              |
+| ------ | ------------------- | ------------------------ |
+| POST   | `/api/users/signup` | Create a new user        |
+| POST   | `/api/users/login`  | Login a user             |
+| GET    | `/api/users`        | Get all users (optional) |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+> Make sure the backend is running at the URL set in `.env.local`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## **Notes**
+
+* **Do not commit `.env.local`** — it may contain sensitive URLs or secrets.
+* **Node modules** are ignored (`node_modules/`) — install them locally with `npm install`.
+* You can extend the project with state management (Redux, Zustand) or UI libraries.
+* Make sure to **match the frontend fetch URLs with backend routes** to avoid JSON parsing errors.
+
+---
+
+## **Author**
+
+* **Shafin Junayed**
+
+---
+
