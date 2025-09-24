@@ -257,10 +257,10 @@ export default function Dashboard() {
               <i className="fas fa-home"></i>
               <span>Dashboard</span>
             </a>
-            <a href="#" className="nav-item">
+            <Link href="/tasks" className="nav-item">
               <i className="fas fa-tasks"></i>
               <span>Tasks</span>
-            </a>
+            </Link>
             <a href="#" className="nav-item">
               <i className="fas fa-project-diagram"></i>
               <span>Projects</span>
