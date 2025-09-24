@@ -5,18 +5,17 @@ import Head from "next/head";
 
 export default function Dashboard() {
   const [user, setUser] = useState({ name: "User", email: "" });
-  const [tasks, setTasks] = useState([]);
-  const [newTask, setNewTask] = useState({ title: "", description: "", priority: "medium" });
-  const [loading, setLoading] = useState(false);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  const [editingTask, setEditingTask] = useState(null);
+  const [recentTasks, setRecentTasks] = useState([]);
   const [stats, setStats] = useState({
     totalTasks: 0,
     completedTasks: 0,
     inProgressTasks: 0,
     todoTasks: 0,
-    streak: 7
+    streak: 7,
+    productivityScore: 85
   });
+  const [loading, setLoading] = useState(false);
+  const [upcomingDeadlines, setUpcomingDeadlines] = useState([]);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -25,7 +24,7 @@ export default function Dashboard() {
       window.location.href = "/login";
       return;
     }
-    
+
     loadDashboardData();
   }, []);
 
@@ -42,9 +41,9 @@ export default function Dashboard() {
     };
   };
 
-  // Load tasks and calculate stats
+  // Load dashboard data
   const loadDashboardData = async () => {
-    setTasksLoading(true);
+    setLoading(true);
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
         method: 'GET',
@@ -59,149 +58,94 @@ export default function Dashboard() {
       console.log("Tasks loaded:", data);
 
       if (data.success && data.tasks) {
-        setTasks(data.tasks);
-        calculateStats(data.tasks);
+        processDashboardData(data.tasks);
       } else {
         console.error("Failed to load tasks:", data.message);
       }
     } catch (error) {
       console.error("Error loading tasks:", error);
-      // If token is invalid, redirect to login
       if (error.message.includes('401')) {
         localStorage.removeItem("token");
         window.location.href = "/login";
       }
     } finally {
-      setTasksLoading(false);
+      setLoading(false);
     }
   };
 
-  // Calculate dashboard statistics
-  const calculateStats = (taskList) => {
-    const total = taskList.length;
-    const completed = taskList.filter(task => task.status === 'completed').length;
-    const inProgress = taskList.filter(task => task.status === 'in_progress').length;
-    const todo = taskList.filter(task => task.status === 'todo').length;
+  // Process data for dashboard
+  const processDashboardData = (tasks) => {
+    const total = tasks.length;
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    const inProgress = tasks.filter(task => task.status === 'in_progress').length;
+    const todo = tasks.filter(task => task.status === 'todo').length;
 
+    // Get recent tasks (last 5)
+    const recent = tasks
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 5);
+
+    // Get upcoming deadlines (next 7 days)
+    const upcoming = tasks
+      .filter(task => task.due_date && new Date(task.due_date) > new Date())
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+      .slice(0, 3);
+
+    setRecentTasks(recent);
+    setUpcomingDeadlines(upcoming);
     setStats({
       totalTasks: total,
       completedTasks: completed,
       inProgressTasks: inProgress,
       todoTasks: todo,
-      streak: 7 // This would come from your backend
+      streak: calculateStreak(tasks),
+      productivityScore: calculateProductivityScore(tasks)
     });
   };
 
-  // Add new task
-  const addTask = async (e) => {
-    e.preventDefault();
-    if (!newTask.title.trim()) return;
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(newTask)
-      });
-
-      const data = await response.json();
-      console.log("Task creation response:", data);
-
-      if (data.success) {
-        setNewTask({ title: "", description: "", priority: "medium" });
-        loadDashboardData(); // Refresh tasks
-      } else {
-        alert(data.message || "Failed to create task");
-      }
-    } catch (error) {
-      console.error("Error creating task:", error);
-      alert("Error creating task. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  // Calculate streak based on completed tasks
+  const calculateStreak = (tasks) => {
+    // Simple streak calculation - in real app, this would be more sophisticated
+    const completedTasks = tasks.filter(task => task.status === 'completed');
+    return completedTasks.length > 0 ? Math.min(completedTasks.length, 30) : 0;
   };
 
-  // Update task status (toggle completion)
-  const toggleTaskStatus = async (task) => {
-    const newStatus = task.status === 'completed' ? 'todo' : 'completed';
-    
+  // Calculate productivity score
+  const calculateProductivityScore = (tasks) => {
+    if (tasks.length === 0) return 0;
+
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    const highPriorityCompleted = tasks.filter(task =>
+      task.status === 'completed' && task.priority === 'high'
+    ).length;
+
+    let score = (completed / tasks.length) * 100;
+
+    // Bonus for completing high priority tasks
+    if (highPriorityCompleted > 0) {
+      score += Math.min(highPriorityCompleted * 5, 20);
+    }
+
+    return Math.min(Math.round(score), 100);
+  };
+
+  // Quick action - mark task as completed
+  const completeTask = async (taskId) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${task.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({
-          ...task,
-          status: newStatus
+          status: 'completed'
         })
       });
 
       const data = await response.json();
-      console.log("Task update response:", data);
-
       if (data.success) {
-        loadDashboardData(); // Refresh tasks
-      } else {
-        alert(data.message || "Failed to update task");
+        loadDashboardData(); // Refresh dashboard
       }
     } catch (error) {
-      console.error("Error updating task:", error);
-      alert("Error updating task. Please try again.");
-    }
-  };
-
-  // Delete task
-  const deleteTask = async (taskId) => {
-    if (!confirm("Are you sure you want to delete this task?")) return;
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
-        method: 'DELETE',
-        headers: getHeaders()
-      });
-
-      const data = await response.json();
-      console.log("Task deletion response:", data);
-
-      if (data.success) {
-        loadDashboardData(); // Refresh tasks
-      } else {
-        alert(data.message || "Failed to delete task");
-      }
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      alert("Error deleting task. Please try again.");
-    }
-  };
-
-  // Start editing task
-  const startEditing = (task) => {
-    setEditingTask({ ...task });
-  };
-
-  // Update existing task
-  const updateTask = async () => {
-    if (!editingTask.title.trim()) return;
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${editingTask.id}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify(editingTask)
-      });
-
-      const data = await response.json();
-      console.log("Task update response:", data);
-
-      if (data.success) {
-        setEditingTask(null);
-        loadDashboardData(); // Refresh tasks
-      } else {
-        alert(data.message || "Failed to update task");
-      }
-    } catch (error) {
-      console.error("Error updating task:", error);
-      alert("Error updating task. Please try again.");
+      console.error("Error completing task:", error);
     }
   };
 
@@ -219,16 +163,28 @@ export default function Dashboard() {
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case "completed": return { color: "success", icon: "check-circle", text: "Completed" };
-      case "in_progress": return { color: "warning", icon: "clock", text: "In Progress" };
-      case "todo": return { color: "secondary", icon: "circle", text: "To Do" };
-      default: return { color: "secondary", icon: "circle", text: "Unknown" };
-    }
+  const getPriorityBadge = (priority) => {
+    const colors = {
+      high: { bg: "#fff5f5", color: "#c53030", text: "HIGH" },
+      medium: { bg: "#fffaf0", color: "#dd6b20", text: "MEDIUM" },
+      low: { bg: "#f0fff4", color: "#276749", text: "LOW" }
+    };
+    return colors[priority] || colors.medium;
   };
 
   const completionPercentage = stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0;
+
+  // Get motivational quote based on productivity
+  const getMotivationalQuote = () => {
+    const quotes = [
+      "The secret of getting ahead is getting started.",
+      "Don't count the days, make the days count.",
+      "Productivity is never an accident. It is always the result of a commitment to excellence.",
+      "Small daily improvements are the key to staggering long-term results.",
+      "Your future is created by what you do today, not tomorrow."
+    ];
+    return quotes[Math.floor(Math.random() * quotes.length)];
+  };
 
   return (
     <>
@@ -251,7 +207,7 @@ export default function Dashboard() {
               Finish-It
             </Link>
           </div>
-          
+
           <nav className="sidebar-nav">
             <a href="#" className="nav-item active">
               <i className="fas fa-home"></i>
@@ -297,14 +253,14 @@ export default function Dashboard() {
               </button>
               <div>
                 <h1 className="header-title">Welcome back!</h1>
-                <p className="header-subtitle">Let's make today productive</p>
+                <p className="header-subtitle">{getMotivationalQuote()}</p>
               </div>
             </div>
             <div className="header-right">
-              <button className="btn btn-primary" onClick={() => document.getElementById('addTaskForm').scrollIntoView()}>
+              <Link href="/tasks" className="btn btn-primary">
                 <i className="fas fa-plus me-2"></i>
                 New Task
-              </button>
+              </Link>
               <div className="user-avatar">
                 <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face" alt="User" />
               </div>
@@ -339,17 +295,6 @@ export default function Dashboard() {
               <div className="col-xl-3 col-md-6">
                 <div className="stat-card gradient-3">
                   <div className="stat-icon">
-                    <i className="fas fa-clock"></i>
-                  </div>
-                  <div className="stat-content">
-                    <h3>{stats.inProgressTasks}</h3>
-                    <p>In Progress</p>
-                  </div>
-                </div>
-              </div>
-              <div className="col-xl-3 col-md-6">
-                <div className="stat-card gradient-4">
-                  <div className="stat-icon">
                     <i className="fas fa-fire"></i>
                   </div>
                   <div className="stat-content">
@@ -358,10 +303,21 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+              <div className="col-xl-3 col-md-6">
+                <div className="stat-card gradient-4">
+                  <div className="stat-icon">
+                    <i className="fas fa-chart-line"></i>
+                  </div>
+                  <div className="stat-content">
+                    <h3>{stats.productivityScore}%</h3>
+                    <p>Productivity Score</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Progress Section */}
+          {/* Progress and Quick Actions Section */}
           <div className="row g-4 mb-4">
             <div className="col-lg-8">
               <div className="dashboard-card">
@@ -377,12 +333,12 @@ export default function Dashboard() {
                       <div className="progress-value">{completionPercentage}%</div>
                       <svg className="progress-svg" viewBox="0 0 120 120">
                         <circle cx="60" cy="60" r="54" stroke="#e1e8ff" strokeWidth="8" fill="transparent" />
-                        <circle 
-                          cx="60" 
-                          cy="60" 
-                          r="54" 
-                          stroke="url(#gradient)" 
-                          strokeWidth="8" 
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r="54"
+                          stroke="url(#gradient)"
+                          strokeWidth="8"
                           fill="transparent"
                           strokeDasharray={`${completionPercentage * 3.39}, 339`}
                           strokeLinecap="round"
@@ -402,12 +358,16 @@ export default function Dashboard() {
                         <span className="stat-value">{stats.completedTasks}/{stats.totalTasks}</span>
                       </div>
                       <div className="stat-item">
-                        <span className="stat-label">Completion Rate</span>
-                        <span className="stat-value">{completionPercentage}%</span>
-                      </div>
-                      <div className="stat-item">
                         <span className="stat-label">In Progress</span>
                         <span className="stat-value">{stats.inProgressTasks}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">To Do</span>
+                        <span className="stat-value">{stats.todoTasks}</span>
+                      </div>
+                      <div className="stat-item">
+                        <span className="stat-label">Productivity</span>
+                        <span className="stat-value">{stats.productivityScore}%</span>
                       </div>
                     </div>
                   </div>
@@ -415,193 +375,175 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="col-lg-4">
-              <div className="dashboard-card" id="addTaskForm">
+              <div className="dashboard-card">
                 <div className="card-header">
                   <h5>
-                    <i className="fas fa-plus me-2"></i>
-                    Add New Task
+                    <i className="fas fa-bolt me-2"></i>
+                    Quick Actions
                   </h5>
                 </div>
                 <div className="card-body">
-                  <form onSubmit={addTask}>
-                    <div className="mb-3">
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Task title"
-                        value={newTask.title}
-                        onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                        required
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <textarea
-                        className="form-control"
-                        placeholder="Description (optional)"
-                        rows="3"
-                        value={newTask.description}
-                        onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <select
-                        className="form-control"
-                        value={newTask.priority}
-                        onChange={(e) => setNewTask({...newTask, priority: e.target.value})}
-                      >
-                        <option value="low">Low Priority</option>
-                        <option value="medium">Medium Priority</option>
-                        <option value="high">High Priority</option>
-                      </select>
-                    </div>
-                    <button 
-                      type="submit" 
-                      className="btn btn-primary w-100"
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2"></span>
-                          Adding...
-                        </>
-                      ) : (
-                        <>
-                          <i className="fas fa-plus me-2"></i>
-                          Add Task
-                        </>
-                      )}
+                  <div className="d-grid gap-3">
+                    <Link href="/tasks" className="btn btn-primary">
+                      <i className="fas fa-plus me-2"></i>
+                      Create New Task
+                    </Link>
+                    <Link href="/tasks?filter=in_progress" className="btn btn-outline-primary">
+                      <i className="fas fa-play-circle me-2"></i>
+                      Continue Working
+                    </Link>
+                    <button className="btn btn-outline-secondary" onClick={loadDashboardData}>
+                      <i className="fas fa-sync-alt me-2"></i>
+                      Refresh Data
                     </button>
-                  </form>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Tasks List */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h5>
-                <i className="fas fa-list me-2"></i>
-                Your Tasks
-              </h5>
-              <button 
-                onClick={loadDashboardData} 
-                className="btn btn-outline-primary btn-sm"
-                disabled={tasksLoading}
-              >
-                {tasksLoading ? (
-                  <span className="spinner-border spinner-border-sm"></span>
-                ) : (
-                  <i className="fas fa-sync-alt"></i>
-                )}
-              </button>
-            </div>
-            <div className="card-body p-0">
-              {tasksLoading ? (
-                <div className="text-center p-4">
-                  <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                  </div>
-                  <p className="mt-2">Loading tasks...</p>
+          {/* Recent Activity and Upcoming Deadlines */}
+          <div className="row g-4">
+            {/* Recent Tasks */}
+            <div className="col-lg-6">
+              <div className="dashboard-card">
+                <div className="card-header">
+                  <h5>
+                    <i className="fas fa-clock me-2"></i>
+                    Recent Tasks
+                  </h5>
+                  <Link href="/tasks" className="btn btn-sm btn-outline-primary">
+                    View All
+                  </Link>
                 </div>
-              ) : tasks.length === 0 ? (
-                <div className="text-center p-4">
-                  <i className="fas fa-tasks fa-3x text-muted mb-3"></i>
-                  <p className="text-muted">No tasks yet. Create your first task above!</p>
-                </div>
-              ) : (
-                <div className="task-list">
-                  {tasks.map((task) => {
-                    const statusBadge = getStatusBadge(task.status);
-                    return (
-                      <div key={task.id} className={`task-item ${task.status === 'completed' ? 'completed' : ''}`}>
-                        <div className="task-checkbox">
-                          <input
-                            type="checkbox"
-                            id={`task-${task.id}`}
-                            checked={task.status === 'completed'}
-                            onChange={() => toggleTaskStatus(task)}
-                          />
-                          <label htmlFor={`task-${task.id}`}></label>
-                        </div>
-                        <div className="task-content">
-                          {editingTask && editingTask.id === task.id ? (
-                            <div>
-                              <input
-                                type="text"
-                                className="form-control mb-2"
-                                value={editingTask.title}
-                                onChange={(e) => setEditingTask({...editingTask, title: e.target.value})}
-                              />
-                              <textarea
-                                className="form-control mb-2"
-                                rows="2"
-                                value={editingTask.description || ''}
-                                onChange={(e) => setEditingTask({...editingTask, description: e.target.value})}
-                              />
-                              <select
-                                className="form-control mb-2"
-                                value={editingTask.priority}
-                                onChange={(e) => setEditingTask({...editingTask, priority: e.target.value})}
-                              >
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                              </select>
-                              <div className="d-flex gap-2">
-                                <button className="btn btn-success btn-sm" onClick={updateTask}>
-                                  <i className="fas fa-check"></i>
-                                </button>
-                                <button className="btn btn-secondary btn-sm" onClick={() => setEditingTask(null)}>
-                                  <i className="fas fa-times"></i>
-                                </button>
+                <div className="card-body p-0">
+                  {loading ? (
+                    <div className="text-center p-4">
+                      <div className="spinner-border text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    </div>
+                  ) : recentTasks.length === 0 ? (
+                    <div className="text-center p-4">
+                      <i className="fas fa-tasks fa-2x text-muted mb-3"></i>
+                      <p className="text-muted">No recent tasks</p>
+                      <Link href="/tasks" className="btn btn-sm btn-primary">
+                        Create Your First Task
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="recent-tasks-list">
+                      {recentTasks.map((task) => {
+                        const priority = getPriorityBadge(task.priority);
+                        return (
+                          <div key={task.id} className="recent-task-item">
+                            <div className="task-info">
+                              <h6 className="task-title">{task.title}</h6>
+                              <div className="task-meta">
+                                <span
+                                  className="priority-badge"
+                                  style={{
+                                    background: priority.bg,
+                                    color: priority.color,
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '600'
+                                  }}
+                                >
+                                  {priority.text}
+                                </span>
+                                <span className="task-status">
+                                  <i className={`fas fa-${task.status === 'completed' ? 'check-circle text-success' : task.status === 'in_progress' ? 'clock text-warning' : 'circle text-secondary'} me-1`}></i>
+                                  {task.status.replace('_', ' ')}
+                                </span>
                               </div>
                             </div>
-                          ) : (
-                            <>
-                              <h6 className="task-title">{task.title}</h6>
-                              {task.description && (
-                                <p className="task-description text-muted small">{task.description}</p>
-                              )}
-                              <div className="task-meta">
-                                <span className={`priority-badge priority-${task.priority}`}>
-                                  {task.priority.toUpperCase()}
-                                </span>
-                                <span className={`badge bg-${statusBadge.color}`}>
-                                  <i className={`fas fa-${statusBadge.icon} me-1`}></i>
-                                  {statusBadge.text}
-                                </span>
-                                {task.created_at && (
-                                  <span className="created-date">
-                                    <i className="fas fa-calendar me-1"></i>
-                                    {new Date(task.created_at).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        {!editingTask || editingTask.id !== task.id ? (
-                          <div className="task-actions">
-                            <button 
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => startEditing(task)}
-                            >
-                              <i className="fas fa-edit"></i>
-                            </button>
-                            <button 
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => deleteTask(task.id)}
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
+                            {task.status !== 'completed' && (
+                              <button
+                                className="btn btn-sm btn-success"
+                                onClick={() => completeTask(task.id)}
+                                title="Mark as completed"
+                              >
+                                <i className="fas fa-check"></i>
+                              </button>
+                            )}
                           </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* Upcoming Deadlines */}
+            <div className="col-lg-6">
+              <div className="dashboard-card">
+                <div className="card-header">
+                  <h5>
+                    <i className="fas fa-calendar-alt me-2"></i>
+                    Upcoming Deadlines
+                  </h5>
+                </div>
+                <div className="card-body p-0">
+                  {upcomingDeadlines.length === 0 ? (
+                    <div className="text-center p-4">
+                      <i className="fas fa-calendar fa-2x text-muted mb-3"></i>
+                      <p className="text-muted">No upcoming deadlines</p>
+                    </div>
+                  ) : (
+                    <div className="deadlines-list">
+                      {upcomingDeadlines.map((task) => {
+                        const daysUntilDue = Math.ceil((new Date(task.due_date) - new Date()) / (1000 * 60 * 60 * 24));
+                        const isUrgent = daysUntilDue <= 1;
+                        const isSoon = daysUntilDue <= 3;
+
+                        return (
+                          <div key={task.id} className={`deadline-item ${isUrgent ? 'urgent' : ''}`}>
+                            <div className="deadline-info">
+                              <h6 className="deadline-title">{task.title}</h6>
+                              <div className="deadline-meta">
+                                <span className={`due-date ${isUrgent ? 'text-danger' : isSoon ? 'text-warning' : 'text-muted'}`}>
+                                  <i className="fas fa-clock me-1"></i>
+                                  {isUrgent ? 'Due today!' : `Due in ${daysUntilDue} days`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="deadline-actions">
+                              <Link href={`/tasks`} className="btn btn-sm btn-outline-primary">
+                                View
+                              </Link>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Productivity Tips */}
+          <div className="row mt-4">
+            <div className="col-12">
+              <div className="dashboard-card">
+                <div className="card-header">
+                  <h5>
+                    <i className="fas fa-lightbulb me-2"></i>
+                    Productivity Tip
+                  </h5>
+                </div>
+                <div className="card-body">
+                  <div className="productivity-tip">
+                    <p className="mb-0">
+                      <strong>Tip of the day:</strong> Break large tasks into smaller, manageable chunks.
+                      Completing these smaller tasks will give you a sense of progress and keep you motivated!
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
