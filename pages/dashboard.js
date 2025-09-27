@@ -6,6 +6,7 @@ import Head from "next/head";
 export default function Dashboard() {
   const [user, setUser] = useState({ name: "User", email: "" });
   const [recentTasks, setRecentTasks] = useState([]);
+  const [quote, setQuote] = useState("Welcome back! Ready to tackle your goals?");
   const [stats, setStats] = useState({
     totalTasks: 0,
     completedTasks: 0,
@@ -24,7 +25,7 @@ export default function Dashboard() {
       window.location.href = "/login";
       return;
     }
-
+    setQuote(getMotivationalQuote());
     loadDashboardData();
   }, []);
 
@@ -253,7 +254,7 @@ export default function Dashboard() {
               </button>
               <div>
                 <h1 className="header-title">Welcome back!</h1>
-                <p className="header-subtitle">{getMotivationalQuote()}</p>
+                <p className="header-subtitle">{quote}</p>
               </div>
             </div>
             <div className="header-right">
